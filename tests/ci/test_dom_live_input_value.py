@@ -18,6 +18,7 @@ PAGE = """<!DOCTYPE html>
 	<label for="notes">Notes</label>
 	<textarea id="notes"></textarea>
 	<input id="secret" type="password">
+	<input id="empty-secret" type="password">
 	<input id="otp" type="text" autocomplete="one-time-code">
 	<input id="card" type="text" autocomplete="cc-number">
 	<input id="agree" type="checkbox" checked>
@@ -57,6 +58,8 @@ async def test_live_input_values_reach_the_agent(browser_session, http_server):
 	assert by_id['otp'].attributes.get('value') is None, 'one-time codes must not be exposed'
 	assert by_id['card'].attributes.get('value') is None, 'card numbers must not be exposed'
 	assert by_id['secret'].snapshot_node is not None and by_id['secret'].snapshot_node.input_value is None
+	assert by_id['secret'].snapshot_node.input_value_present is True
+	assert by_id['empty-secret'].snapshot_node.input_value_present is False
 	assert by_id['agree'].attributes.get('checked') is None, 'live unchecked state wins over the checked attribute'
 	assert by_id['news'].attributes.get('checked') == 'true'
 
@@ -66,3 +69,16 @@ async def test_live_input_values_reach_the_agent(browser_session, http_server):
 	assert 'hunter2' not in llm_view
 	assert '493021' not in llm_view
 	assert '4242424242424242' not in llm_view
+	secret_line = next(line for line in llm_view.splitlines() if 'id=secret ' in line)
+	empty_line = next(line for line in llm_view.splitlines() if 'id=empty-secret ' in line)
+	assert 'value-state=filled' in secret_line
+	assert 'value-state=empty' in empty_line
+	# A later clear must replace the previous filled state, without exposing values.
+	cdp = await browser_session.get_or_create_cdp_session()
+	await cdp.cdp_client.send.Runtime.evaluate(
+		params={'expression': "document.getElementById('secret').value = ''"}, session_id=cdp.session_id
+	)
+	cleared = await browser_session.get_browser_state_summary()
+	assert 'value-state=empty' in next(
+		line for line in cleared.dom_state.llm_representation().splitlines() if 'id=secret ' in line
+	)

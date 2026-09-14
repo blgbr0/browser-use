@@ -118,12 +118,21 @@ def build_snapshot_lookup(
 		# Live form values live in the snapshot, not in the DOM attributes. Map
 		# snapshot index -> string once so each node lookup stays O(1).
 		input_value_by_index: dict[int, str] = {}
+		input_value_present_by_index: dict[int, bool] = {}
+		# CDP's rare string array omits empty input values. Absence means empty
+		# only when this document actually supplied the inputValue snapshot.
+		if 'inputValue' in nodes:
+			for idx, name_index in enumerate(nodes.get('nodeName', [])):
+				if 0 <= name_index < len(strings) and strings[name_index].upper() == 'INPUT':
+					input_value_present_by_index[idx] = False
 		for key in ('inputValue', 'textValue'):
 			rare = nodes.get(key)
 			if rare:
 				for idx, string_index in zip(rare.get('index', []), rare.get('value', [])):
-					if 0 <= string_index < len(strings) and not _is_sensitive_input(strings, nodes, idx):
-						input_value_by_index[idx] = strings[string_index]
+					if 0 <= string_index < len(strings):
+						input_value_present_by_index[idx] = bool(strings[string_index])
+						if not _is_sensitive_input(strings, nodes, idx):
+							input_value_by_index[idx] = strings[string_index]
 		input_checked_set: set[int] = set(nodes['inputChecked']['index']) if 'inputChecked' in nodes else set()
 		has_checked_data = 'inputChecked' in nodes
 
@@ -210,6 +219,7 @@ def build_snapshot_lookup(
 				paint_order=paint_order,
 				stacking_contexts=stacking_contexts,
 				input_value=input_value_by_index.get(snapshot_index),
+				input_value_present=input_value_present_by_index.get(snapshot_index),
 				input_checked=(snapshot_index in input_checked_set) if has_checked_data else None,
 			)
 

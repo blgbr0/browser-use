@@ -355,6 +355,8 @@ class EnhancedSnapshotNode:
 	"""Stacking contexts from the layout tree"""
 	input_value: str | None = None
 	"""Live value of an <input> or <textarea> (DOMSnapshot inputValue/textValue), which the value attribute misses when JS, autofill, or a framework set it."""
+	input_value_present: bool | None = None
+	"""Whether the live field is filled; preserves state without exposing a sensitive value."""
 	input_checked: bool | None = None
 	"""Live checked state of a checkbox or radio input (DOMSnapshot inputChecked)."""
 
